@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: orders-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: masterdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - orders-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: orders-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - orders-network
+
+  orders-api:
+    build:
+      context: .
+      dockerfile: src/Services/Orders.Api/Dockerfile
+    container_name: orders-api
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "5000:8080"
+    networks:
+      - orders-network
+
+  inventory-worker:
+    build:
+      context: .
+      dockerfile: src/Services/Inventory.Worker/Dockerfile
+    container_name: inventory-worker
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DOTNET_ENVIRONMENT: Development
+    networks:
+      - orders-network
+
+  billing-worker:
+    build:
+      context: .
+      dockerfile: src/Services/Billing.Worker/Dockerfile
+    container_name: billing-worker
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DOTNET_ENVIRONMENT: Development
+    networks:
+      - orders-network
+
+networks:
+  orders-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
